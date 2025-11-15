@@ -5,13 +5,12 @@ use rocket::serde::{Deserialize, Serialize};
 use rocket::State;
 use tokio::sync::{mpsc, MutexGuard};
 use rocket_ws as ws;
-use rocket_ws::{result, Message};
+use rocket_ws::{Message};
 use tokio::sync::mpsc::error::SendError;
 use uuid::Uuid;
-use crate::ws_app_state::{Client, ClientData, Room, RoomClient, RoomData, WsAppState};
+use crate::ws_app_state::{Client, ClientData, Room, RoomData, WsAppState};
 use crate::ws_dto_models::{RoomDataDto};
 use anyhow::{anyhow, Result};
-use rocket::outcome::IntoOutcome;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
@@ -20,6 +19,7 @@ enum IncomingMessage {
     ChangeName { new_name: String },
     JoinRoom { room_id: String },
     PlayerEvent { event: PlayerEvent },
+    ReportPlayerStatus { player_status: PlayerStatus },
     ChangeClientAdminStatus { client_uid: Uuid, admin: bool },
     ChangeRoomPreferences {  page_url: String, allow_stop_due_to_video_loading: bool },
     QuitRoom,
@@ -34,6 +34,7 @@ enum OutgoingMessage {
     Error { kind: ErrorKind, msg: Option<String> },
     RoomChanged { data: RoomDataDto },
     PlayerEvent { event: PlayerEvent, client_uid: Uuid },
+    ReportPlayerStatus {  player_status: PlayerStatus, client_uid: Uuid },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,6 +44,13 @@ enum PlayerEvent {
     StopPlaying { at_second: f64 },
     StopDueToVideoLoading { at_second: f64 },
     Seek { to_second: f64 },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PlayerStatus {
+    playing: bool,
+    loading: bool,
+    at_second: f64,
 }
 
 
@@ -180,6 +188,24 @@ async fn handle_message(current_client: &Arc<Client>, msg: Message, state: &Arc<
 
                             let outgoing_message = OutgoingMessage::PlayerEvent {
                                 event,
+                                client_uid: current_client.uid,
+                            };
+                            let payload = serde_json::to_string(&outgoing_message)?;
+
+                            for room_client in room_data.clients.iter().filter(|room_client| room_client.client.uid != current_client.uid) {
+                                let _ = response_with_text(&room_client.client, payload.clone());
+                            }
+                            response_with_success(current_client);
+                        }
+                    },
+                    IncomingMessage::ReportPlayerStatus { player_status } => {
+                        if let Ok(current_client_data) = client_in_room(current_client).await {
+                            let room = current_client_data.room.as_ref().ok_or(anyhow!("Unexpected error"))?.clone();
+                            drop(current_client_data);
+                            let room_data = room.data.lock().await;
+
+                            let outgoing_message = OutgoingMessage::ReportPlayerStatus {
+                                player_status,
                                 client_uid: current_client.uid,
                             };
                             let payload = serde_json::to_string(&outgoing_message)?;
