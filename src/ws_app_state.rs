@@ -35,6 +35,8 @@ pub struct Room {
 #[derive(Debug)]
 pub struct RoomData {
     pub clients: Vec<RoomClient>,
+    pub page_url: Option<String>,
+    pub allow_stop_due_to_video_loading: bool,
 }
 
 #[derive(Debug)]
@@ -78,6 +80,8 @@ impl Room {
             room_id,
             data: Mutex::new(RoomData {
                 clients: Vec::new(),
+                page_url: None,
+                allow_stop_due_to_video_loading: true,
             }),
         }
     }
@@ -91,6 +95,8 @@ impl Room {
                     owner: true,
                     admin: true,
                 }],
+                page_url: None,
+                allow_stop_due_to_video_loading: true,
             }),
         }
     }
@@ -127,8 +133,12 @@ impl RoomData {
         }
     }
 
-    pub fn can_control(&self, client: Arc<Client>) -> bool {
-        let room_client = self.clients.iter().find(|c| Arc::ptr_eq(&c.client, &client));
+    pub fn find_room_client(&self, client: &Client) -> Option<&RoomClient> {
+        self.clients.iter().find(|c| c.client.uid == client.uid)
+    }
+
+    pub fn can_control(&self, client: &Client) -> bool {
+        let room_client = self.find_room_client(client);
         if let Some(room_client) = room_client {
             room_client.can_control()
         } else {

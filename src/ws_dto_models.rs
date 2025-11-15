@@ -6,6 +6,8 @@ use crate::ws_app_state::{RoomClient, RoomData};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RoomDataDto {
     pub clients: Vec<RoomClientDto>,
+    pub page_url: Option<String>,
+    pub allow_stop_due_to_video_loading: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -20,6 +22,8 @@ impl RoomDataDto {
     pub async fn from(value: &RoomData) -> Self {
         RoomDataDto {
             clients: join_all(value.clients.iter().map(RoomClientDto::from)).await,
+            page_url: value.page_url.clone(),
+            allow_stop_due_to_video_loading: value.allow_stop_due_to_video_loading,
         }
     }
 }

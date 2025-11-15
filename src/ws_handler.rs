@@ -17,7 +17,9 @@ enum IncomingMessage {
     Ping,
     ChangeName { new_name: String },
     JoinRoom { room_id: String },
+    PlayerEvent { event: PlayerEvent },
     ChangeClientAdminStatus { client_uid: Uuid, admin: bool },
+    ChangeRoomPreferences {  page_url: String, allow_stop_due_to_video_loading: bool },
     QuitRoom,
 }
 
@@ -29,7 +31,18 @@ enum OutgoingMessage {
     Success,
     Error { kind: ErrorKind, msg: Option<String> },
     RoomChanged { data: RoomDataDto },
+    PlayerEvent { event: PlayerEvent, client_uid: Uuid },
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+enum PlayerEvent {
+    StartPlaying { at_second: f64 },
+    StopPlaying { at_second: f64 },
+    StopDueToVideoLoading { at_second: f64 },
+    Seek { to_second: f64 },
+}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 enum ErrorKind {
@@ -120,16 +133,45 @@ pub fn ws_handler(ws: ws::WebSocket, state: &State<Arc<WsAppState>>) -> ws::Chan
 
                                         rooms.insert(room_id, new_room);
                                     }
-                                }
-                                IncomingMessage::ChangeClientAdminStatus { client_uid, admin } => {
+                                },
+                                IncomingMessage::PlayerEvent {event} => 'label:  {
+                                    if let Ok(current_client_data) = client_in_room(&current_client).await {
+                                        let room = current_client_data.room.as_ref().unwrap().clone();
+                                        drop(current_client_data);
+                                        let room_data = room.data.lock().await;
+
+                                        let can_control = match event {
+                                            PlayerEvent::StopDueToVideoLoading { .. } | PlayerEvent::StartPlaying { .. } => room_data.allow_stop_due_to_video_loading,
+                                            _ => room_data.can_control(&current_client)
+                                        };
+
+                                        if !can_control {
+                                            response_with_error(&current_client, ErrorKind::Forbidden);
+                                            break 'label;
+                                        }
+
+                                        let outgoing_message = OutgoingMessage::PlayerEvent {
+                                            event,
+                                            client_uid: current_client.uid,
+                                        };
+                                        let payload = serde_json::to_string(&outgoing_message).unwrap();
+
+                                        for room_client in room_data.clients.iter().filter(|room_client| room_client.client.uid != current_client.uid) {
+                                            let _ = response_with_text(&room_client.client, payload.clone());
+                                        }
+                                        response_with_success(&current_client);
+                                    }
+                                },
+                                IncomingMessage::ChangeClientAdminStatus { client_uid, admin } => 'label: {
                                     if let Ok(current_client_data) = client_in_room(&current_client).await {
                                         let room = current_client_data.room.as_ref().unwrap().clone();
                                         drop(current_client_data);
                                         let mut room_data = room.data.lock().await;
 
-                                        let room_current_client = room_data.clients.iter().find(|room_client| room_client.client.uid == current_client.uid).unwrap();
+                                        let room_current_client = room_data.find_room_client(&current_client).unwrap();
                                         if !room_current_client.owner {
                                             response_with_error(&current_client, ErrorKind::Forbidden);
+                                            break 'label;
                                         }
 
                                         let room_target_client = room_data.clients.iter_mut().find(|room_client| room_client.client.uid == client_uid);
@@ -141,6 +183,25 @@ pub fn ws_handler(ws: ws::WebSocket, state: &State<Arc<WsAppState>>) -> ws::Chan
                                         } else {
                                             response_with_error(&current_client, ErrorKind::NoSuchClient);
                                         }
+                                    }
+                                },
+                                IncomingMessage::ChangeRoomPreferences { page_url, allow_stop_due_to_video_loading } => 'label: {
+                                    if let Ok(current_client_data) = client_in_room(&current_client).await {
+                                        let room = current_client_data.room.as_ref().unwrap().clone();
+                                        drop(current_client_data);
+                                        let mut room_data = room.data.lock().await;
+
+                                        let room_current_client = room_data.find_room_client(&current_client).unwrap();
+                                        if !room_current_client.owner {
+                                            response_with_error(&current_client, ErrorKind::Forbidden);
+                                            break 'label;
+                                        }
+
+                                        room_data.page_url = Some(page_url);
+                                        room_data.allow_stop_due_to_video_loading = allow_stop_due_to_video_loading;
+
+                                        response_with_success(&current_client);
+                                        broadcast_room_change(&room_data).await;
                                     }
                                 }
                                 IncomingMessage::QuitRoom => {
