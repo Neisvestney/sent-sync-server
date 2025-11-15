@@ -48,6 +48,7 @@ enum PlayerEvent {
 
 #[derive(Serialize, Deserialize, Debug)]
 enum ErrorKind {
+    InternalServerError,
     JsonError,
     ClientNotInAnyRoom,
     ClientNameNotSet,
@@ -92,6 +93,7 @@ pub fn ws_handler(ws: ws::WebSocket, state: &State<Arc<WsAppState>>) -> ws::Chan
                 let result = handle_message(&current_client, msg, &state).await;
                 if let Err(e) = result {
                     rocket::error!("Error while handling ws client message: {:?}", e);
+                    response_with_error(&current_client, ErrorKind::InternalServerError);
                 }
             }
 

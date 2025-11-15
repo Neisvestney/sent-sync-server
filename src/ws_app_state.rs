@@ -68,12 +68,6 @@ impl Client {
     }
 }
 
-impl Drop for Client {
-    fn drop(&mut self) {
-        println!("Client: drop");
-    }
-}
-
 impl Room {
     pub fn new(room_id: String) -> Self {
         Room {
@@ -99,12 +93,6 @@ impl Room {
                 allow_stop_due_to_video_loading: true,
             }),
         }
-    }
-}
-
-impl Drop for Room {
-    fn drop(&mut self) {
-        println!("Room: drop");
     }
 }
 
