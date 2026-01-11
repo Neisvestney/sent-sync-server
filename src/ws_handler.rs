@@ -11,34 +11,37 @@ use uuid::Uuid;
 use crate::ws_app_state::{Client, ClientData, Room, RoomData, WsAppState};
 use crate::ws_dto_models::{RoomDataDto};
 use anyhow::{anyhow, Result};
+use ts_rs::TS;
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type")]
+#[ts(export)]
 enum IncomingMessage {
     Ping,
     ChangeName { new_name: String },
     JoinRoom { room_id: String },
     PlayerEvent { event: PlayerEvent },
     ReportPlayerStatus { player_status: PlayerStatus },
-    ChangeClientAdminStatus { client_uid: Uuid, admin: bool },
+    ChangeClientAdminStatus { #[ts(type = "string")] client_uid: Uuid, admin: bool },
     ChangeRoomPreferences {  page_url: String, allow_stop_due_to_video_loading: bool },
     QuitRoom,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type")]
+#[ts(export)]
 enum OutgoingMessage {
     Pong,
-    ClientUid { client_uid: Uuid },
+    ClientUid { #[ts(type = "string")] client_uid: Uuid },
     Success,
     Error { kind: ErrorKind, msg: Option<String> },
     RoomChanged { data: RoomDataDto },
-    PlayerEvent { event: PlayerEvent, client_uid: Uuid },
-    ReportPlayerStatus {  player_status: PlayerStatus, client_uid: Uuid },
+    PlayerEvent { event: PlayerEvent, #[ts(type = "string")] client_uid: Uuid },
+    ReportPlayerStatus {  player_status: PlayerStatus, #[ts(type = "string")] client_uid: Uuid },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type")]
 enum PlayerEvent {
     StartPlaying { at_second: f64 },
     StopPlaying { at_second: f64 },
@@ -46,7 +49,8 @@ enum PlayerEvent {
     Seek { to_second: f64 },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(rename_all = "camelCase")]
 struct PlayerStatus {
     playing: bool,
     loading: bool,
@@ -54,7 +58,8 @@ struct PlayerStatus {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 enum ErrorKind {
     InternalServerError,
     JsonError,

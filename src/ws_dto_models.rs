@@ -1,18 +1,24 @@
 use rocket::futures::future::join_all;
 use rocket::serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use uuid::Uuid;
 use crate::ws_app_state::{RoomClient, RoomData};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct RoomDataDto {
     pub clients: Vec<RoomClientDto>,
     pub page_url: Option<String>,
     pub allow_stop_due_to_video_loading: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct RoomClientDto {
     pub name: Option<String>,
+    #[ts(type = "string")]
     pub uid: Uuid,
     pub owner: bool,
     pub admin: bool,
